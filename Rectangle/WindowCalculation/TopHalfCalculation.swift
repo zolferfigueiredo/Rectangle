@@ -4,10 +4,20 @@ import Foundation
 
 class TopHalfCalculation: WindowCalculation, RepeatedExecutionsInThirdsCalculation {
 
+    override func calculate(_ params: WindowCalculationParameters) -> WindowCalculationResult? {
+        calculateAcrossVerticalDisplays(params) ?? super.calculate(params)
+    }
+
     override func calculateRect(_ params: RectCalculationParameters) -> RectResult {
 
         if Defaults.halvesPreserveOtherAxisSize.enabled, let tiledRect = HalvesPreserveOtherAxisSize.rect(for: params) {
             return tiledRect
+        }
+
+        if Defaults.subsequentExecutionMode.value == .switchSides {
+            // Repeating Top Half while the window still sits on the top half moves it to the bottom
+            // half; see LeftRightHalfCalculation.calculateSwitchSides.
+            return isRepeatedCommand(params) ? facingVerticalHalf(params) : calculateFirstRect(params)
         }
 
         if params.lastAction == nil || !Defaults.subsequentExecutionMode.resizes {
