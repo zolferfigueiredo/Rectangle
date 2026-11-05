@@ -232,6 +232,11 @@ class ShortcutManager {
         defer { if !completionHandledByWindowManager { originalParameters.completion?() } }
         Notification.Name.windowActionWillExecute.post(object: parameters)
 
+        if parameters.action == .displayMode {
+            DisplayModeManager.shared.showPicker()
+            return
+        }
+
         if MultiWindowManager.execute(parameters: parameters) {
             return
         }
