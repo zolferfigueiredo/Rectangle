@@ -54,6 +54,15 @@ final class DisplayModeManager {
         return unsafeBitCast(symbol, to: SetDisplayEnabled.self)
     }()
 
+    private typealias GetDisplayList = @convention(c) (UInt32, UnsafeMutablePointer<CGDirectDisplayID>?, UnsafeMutablePointer<UInt32>?) -> CGError
+
+    /// Private SkyLight call: unlike the online list, it still has the displays that are turned off.
+    private static let getDisplayList: GetDisplayList? = {
+        let handle = UnsafeMutableRawPointer(bitPattern: -2)
+        guard let symbol = dlsym(handle, "CGSGetDisplayList") ?? dlsym(handle, "SLSGetDisplayList") else { return nil }
+        return unsafeBitCast(symbol, to: GetDisplayList.self)
+    }()
+
     /// Displays turned off here may drop out of the online list, so they're remembered.
     private var disabled = Set<CGDirectDisplayID>()
     private var numbers = [CGDirectDisplayID: Int]()
@@ -120,7 +129,18 @@ final class DisplayModeManager {
         CGGetOnlineDisplayList(0, nil, &count)
         var online = [CGDirectDisplayID](repeating: 0, count: Int(count))
         CGGetOnlineDisplayList(count, &online, &count)
-        return Set(online.prefix(Int(count))).union(disabled).sorted()
+        let onlineSet = Set(online.prefix(Int(count)))
+        // Sleep can empty `disabled` while those displays stay off, so take back any connected display that is off.
+        // A closed lid also takes the built-in display offline, so it's left out.
+        // ponytail: a built-in display turned off here and then forgotten isn't found again; quitting Rectangle turns it back on.
+        if let getDisplayList = Self.getDisplayList {
+            var connected = [CGDirectDisplayID](repeating: 0, count: 32)
+            var connectedCount: UInt32 = 0
+            if getDisplayList(UInt32(connected.count), &connected, &connectedCount) == .success {
+                disabled.formUnion(connected.prefix(Int(connectedCount)).filter { !onlineSet.contains($0) && CGDisplayIsBuiltin($0) == 0 })
+            }
+        }
+        return onlineSet.union(disabled).sorted()
     }
 
     private func isMirroring(_ displays: [CGDirectDisplayID]) -> Bool {
