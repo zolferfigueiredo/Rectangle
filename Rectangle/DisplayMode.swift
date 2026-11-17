@@ -56,7 +56,6 @@ final class DisplayModeManager {
 
     private typealias GetDisplayList = @convention(c) (UInt32, UnsafeMutablePointer<CGDirectDisplayID>?, UnsafeMutablePointer<UInt32>?) -> CGError
 
-    /// Private SkyLight call: unlike the online list, it still has the displays that are turned off.
     private static let getDisplayList: GetDisplayList? = {
         let handle = UnsafeMutableRawPointer(bitPattern: -2)
         guard let symbol = dlsym(handle, "CGSGetDisplayList") ?? dlsym(handle, "SLSGetDisplayList") else { return nil }
@@ -130,9 +129,7 @@ final class DisplayModeManager {
         var online = [CGDirectDisplayID](repeating: 0, count: Int(count))
         CGGetOnlineDisplayList(count, &online, &count)
         let onlineSet = Set(online.prefix(Int(count)))
-        // Sleep can empty `disabled` while those displays stay off, so take back any connected display that is off.
-        // A closed lid also takes the built-in display offline, so it's left out.
-        // ponytail: a built-in display turned off here and then forgotten isn't found again; quitting Rectangle turns it back on.
+        // Sleep can empty `disabled` while those displays stay off. A closed lid takes the built-in one offline too.
         if let getDisplayList = Self.getDisplayList {
             var connected = [CGDirectDisplayID](repeating: 0, count: 32)
             var connectedCount: UInt32 = 0
